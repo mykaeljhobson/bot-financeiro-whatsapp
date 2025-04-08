@@ -3,7 +3,7 @@ from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
 from uploader import upload_para_imgur
 from relatorio_csv import gerar_planilha_csv
-from main_logic import process_message
+from main import process_message
 import os
 
 app = Flask(__name__)
