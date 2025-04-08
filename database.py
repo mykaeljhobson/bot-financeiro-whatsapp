@@ -1,65 +1,52 @@
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 
-conn = sqlite3.connect("gastos.db", check_same_thread=False)
-cursor = conn.cursor()
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS gastos (
-    id INTEGER PRIMARY KEY,
-    phone TEXT,
-    valor REAL,
-    descricao TEXT,
-    data TEXT
-)
-""")
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS limites (
-    phone TEXT PRIMARY KEY,
-    limite REAL
-)
-""")
-conn.commit()
-
-def insert_gasto(phone, valor, descricao):
-    cursor.execute("INSERT INTO gastos (phone, valor, descricao, data) VALUES (?, ?, ?, ?)",
-                   (phone, valor, descricao, datetime.now().isoformat()))
+def init_db():
+    conn = sqlite3.connect("gastos.db")
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS gastos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    telefone TEXT,
+                    valor REAL,
+                    descricao TEXT,
+                    categoria TEXT,
+                    data_hora TEXT
+                )''')
     conn.commit()
+    conn.close()
 
-def get_resumo(phone, periodo):
-    now = datetime.now()
-    if periodo == "semana":
-        inicio = now - timedelta(days=7)
-    elif periodo == "mês":
-        inicio = now.replace(day=1)
+def insert_gasto(telefone, valor, descricao, categoria):
+    data_hora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn = sqlite3.connect("gastos.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO gastos (telefone, valor, descricao, categoria, data_hora) VALUES (?, ?, ?, ?, ?)",
+              (telefone, valor, descricao, categoria, data_hora))
+    conn.commit()
+    conn.close()
+
+def get_resumo(telefone, periodo="hoje"):
+    conn = sqlite3.connect("gastos.db")
+    c = conn.cursor()
+    if periodo == "hoje":
+        data = datetime.now().strftime('%Y-%m-%d')
+        c.execute("SELECT valor, descricao, categoria, data_hora FROM gastos WHERE telefone=? AND data_hora LIKE ?", (telefone, f"{data}%"))
+    elif periodo == "semana":
+        c.execute("SELECT valor, descricao, categoria, data_hora FROM gastos WHERE telefone=? AND date(data_hora) >= date('now', '-6 days')", (telefone,))
+    elif periodo == "mes":
+        c.execute("SELECT valor, descricao, categoria, data_hora FROM gastos WHERE telefone=? AND strftime('%Y-%m', data_hora) = strftime('%Y-%m', 'now')", (telefone,))
     else:
-        inicio = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        conn.close()
+        return "❌ Período inválido."
 
-    cursor.execute("SELECT valor, descricao, data FROM gastos WHERE phone = ? AND data >= ?",
-                   (phone, inicio.isoformat()))
-    rows = cursor.fetchall()
-    total = sum([r[0] for r in rows])
-    linhas = "\n".join([f"- R${r[0]:.2f} {r[1]}" for r in rows])
-    return f"📊 Resumo {periodo}:\n{linhas}\n\nTotal: R${total:.2f}"
+    resultados = c.fetchall()
+    conn.close()
 
-def set_limite(phone, valor):
-    cursor.execute("REPLACE INTO limites (phone, limite) VALUES (?, ?)", (phone, valor))
-    conn.commit()
+    if not resultados:
+        return "📭 Nenhum gasto encontrado nesse período."
 
-def check_limite(phone):
-    cursor.execute("SELECT limite FROM limites WHERE phone = ?", (phone,))
-    row = cursor.fetchone()
-    if not row:
-        return ""
-    limite = row[0]
+    total = sum([r[0] for r in resultados])
+    detalhes = "\n".join([f"- R${r[0]:.2f} {r[1]} ({r[2]}) em {r[3]}" for r in resultados])
+    return f"📊 Total gasto no período ({periodo}): R${total:.2f}\n{detalhes}"
 
-    cursor.execute("SELECT SUM(valor) FROM gastos WHERE phone = ? AND data >= ?",
-                   (phone, datetime.now().replace(day=1).isoformat()))
-    total = cursor.fetchone()[0] or 0
-
-    if total > limite:
-        return f"🚨 Você ultrapassou o limite mensal de R${limite:.2f}!"
-    elif total > limite * 0.9:
-        return f"⚠️ Atenção: Você já usou mais de 90% do limite mensal."
+def check_limite(telefone):
     return ""

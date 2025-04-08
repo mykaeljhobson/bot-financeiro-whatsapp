@@ -1,71 +1,73 @@
-from database import insert_gasto, get_resumo, set_limite, check_limite
-from openai import OpenAI
+from flask import Flask, request
+from twilio.twiml.messaging_response import MessagingResponse
+from twilio.rest import Client
+from uploader import upload_para_imgur
+from relatorio_csv import gerar_planilha_csv
+from main_logic import process_message
 import os
 
-# Inicializa o cliente da OpenAI
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+app = Flask(__name__)
 
-def sugerir_categoria_ia(descricao):
-    prompt = f"Classifique a seguinte descrição de gasto em uma categoria: '{descricao}'. Sugira uma categoria curta e clara como alimentação, transporte, lazer, moradia, saúde, educação, etc."
+# Twilio config
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
 
-    try:
-        resposta = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=20,
-            temperature=0.5,
+client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+estado_usuario = {}
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    incoming_msg = request.values.get("Body", "").strip().lower()
+    phone = request.values.get("From", "")
+    response = MessagingResponse()
+
+    if phone in estado_usuario:
+        etapa = estado_usuario[phone]["etapa"]
+        
+        if etapa == "tipo_relatorio":
+            if incoming_msg in ["1", "2"]:
+                periodo = estado_usuario[phone]["periodo"]
+                del estado_usuario[phone]
+
+                if incoming_msg == "1":
+                    resposta = process_message(f"relatorio_imagem {periodo}", phone)
+                    response.message(resposta)
+                else:
+                    csv_path = gerar_planilha_csv(periodo, telefone=phone)
+                    if csv_path:
+                        link = upload_para_imgur(csv_path)
+                        if link:
+                            send_media(phone, link, "📎 Seu relatório em planilha está pronto!")
+                        else:
+                            response.message("❌ Erro ao enviar a planilha.")
+                    else:
+                        response.message("📭 Nenhum dado encontrado para gerar o relatório.")
+            else:
+                response.message("❌ Opção inválida. Responda com 1 ou 2.")
+            return str(response)
+
+    if incoming_msg.startswith("relatorio"):
+        periodo = incoming_msg.replace("relatorio", "").strip() or "mes"
+        estado_usuario[phone] = {"etapa": "tipo_relatorio", "periodo": periodo}
+        response.message(
+            "📊 Que tipo de relatório você deseja?
+"
+            "1️⃣ Gráfico (imagem)
+"
+            "2️⃣ Planilha (CSV)"
         )
-        categoria = resposta.choices[0].message.content.strip().lower()
-        print(f"🔍 Categoria sugerida pela IA: {categoria}")
-        return categoria
-    except Exception as e:
-        print(f"❌ Erro ao usar IA: {e}")
-        return "outros"
+    else:
+        resposta = process_message(incoming_msg, phone)
+        response.message(resposta)
 
-def process_message(msg, phone):
-    tokens = msg.lower().split()
+    return str(response)
 
-    if tokens[0] == "gasto":
-        try:
-            valor = float(tokens[1])
-            descricao = " ".join(tokens[2:])
-            categoria = sugerir_categoria_ia(descricao)
-            insert_gasto(phone, valor, descricao)  # pode adaptar pra salvar a categoria também
-            alerta = check_limite(phone)
-            return f"✅ Gasto registrado: R${valor:.2f} - {descricao} (Categoria sugerida: {categoria})\n{alerta}"
-        except:
-            return "❌ Formato inválido. Use: gasto 25 almoço"
-
-    elif tokens[0] == "resumo":
-        periodo = tokens[1] if len(tokens) > 1 else "hoje"
-        return get_resumo(phone, periodo)
-
-    elif tokens[0] == "limite":
-        try:
-            valor = float(tokens[1])
-            set_limite(phone, valor)
-            return f"🔒 Limite mensal definido: R${valor:.2f}"
-        except:
-            return "❌ Use: limite 1500"
-
-    # 💡 Comando resumido, tipo: "pizza 40"
-    try:
-        partes = msg.lower().split()
-        for i, p in enumerate(partes):
-            try:
-                valor = float(p.replace(",", "."))
-                descricao = " ".join(partes[:i] + partes[i+1:])
-                break
-            except:
-                continue
-        else:
-            return "🤖 Comando não reconhecido. Tente: gasto 20 almoço"
-
-        categoria = sugerir_categoria_ia(descricao)
-        insert_gasto(phone, valor, descricao)
-        alerta = check_limite(phone)
-        return f"✅ Gasto registrado: R${valor:.2f} - {descricao} (Categoria sugerida: {categoria})\n{alerta}"
-    except:
-        return "🤖 Comando não reconhecido. Use: gasto 25 almoço"
-
-    return "🤖 Comandos disponíveis: gasto, resumo [hoje|semana|mês], limite"
+def send_media(to, media_url, caption):
+    client.messages.create(
+        from_=TWILIO_WHATSAPP_NUMBER,
+        body=caption,
+        to=to,
+        media_url=[media_url]
+    )
