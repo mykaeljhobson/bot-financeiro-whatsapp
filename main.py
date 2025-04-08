@@ -4,6 +4,7 @@ from twilio.rest import Client
 from uploader import upload_para_imgur
 from relatorio_csv import gerar_planilha_csv
 from message_logic import process_message
+from database import init_db
 import os
 
 app = Flask(__name__)
@@ -52,8 +53,10 @@ def webhook():
         periodo = incoming_msg.replace("relatorio", "").strip() or "mes"
         estado_usuario[phone] = {"etapa": "tipo_relatorio", "periodo": periodo}
         response.message(
-            "📊 Que tipo de relatório você deseja?\n"
-            "1️⃣ Gráfico (imagem)\n"
+            "📊 Que tipo de relatório você deseja?
+"
+            "1️⃣ Gráfico (imagem)
+"
             "2️⃣ Planilha (CSV)"
         )
     else:
@@ -69,3 +72,6 @@ def send_media(to, media_url, caption):
         to=to,
         media_url=[media_url]
     )
+
+# Inicializa o banco de dados ao subir o app
+init_db()
