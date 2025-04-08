@@ -1,23 +1,25 @@
 from database import insert_gasto, get_resumo, set_limite, check_limite
-import openai
+from openai import OpenAI
 import os
 
-openai.api_key = os.environ.get("OPENAI_API_KEY")
+# Inicializa o cliente da OpenAI
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 def sugerir_categoria_ia(descricao):
     prompt = f"Classifique a seguinte descrição de gasto em uma categoria: '{descricao}'. Sugira uma categoria curta e clara como alimentação, transporte, lazer, moradia, saúde, educação, etc."
 
     try:
-        resposta = openai.ChatCompletion.create(
+        resposta = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=20,
             temperature=0.5,
         )
-        categoria = resposta["choices"][0]["message"]["content"].strip().lower()
+        categoria = resposta.choices[0].message.content.strip().lower()
+        print(f"🔍 Categoria sugerida pela IA: {categoria}")
         return categoria
     except Exception as e:
-        print(f"Erro ao usar IA: {e}")
+        print(f"❌ Erro ao usar IA: {e}")
         return "outros"
 
 def process_message(msg, phone):
@@ -28,7 +30,7 @@ def process_message(msg, phone):
             valor = float(tokens[1])
             descricao = " ".join(tokens[2:])
             categoria = sugerir_categoria_ia(descricao)
-            insert_gasto(phone, valor, descricao)  # pode adaptar para salvar categoria também
+            insert_gasto(phone, valor, descricao)  # pode adaptar pra salvar a categoria também
             alerta = check_limite(phone)
             return f"✅ Gasto registrado: R${valor:.2f} - {descricao} (Categoria sugerida: {categoria})\n{alerta}"
         except:
