@@ -53,12 +53,10 @@ def webhook():
         periodo = incoming_msg.replace("relatorio", "").strip() or "mes"
         estado_usuario[phone] = {"etapa": "tipo_relatorio", "periodo": periodo}
         response.message(
-            "📊 Que tipo de relatório você deseja?
-"
-            "1️⃣ Gráfico (imagem)
-"
-            "2️⃣ Planilha (CSV)"
-        )
+    "📊 Que tipo de relatório você deseja?\n"
+    "1️⃣ Gráfico (imagem)\n"
+    "2️⃣ Planilha (CSV)"
+)
     else:
         resposta = process_message(incoming_msg, phone)
         response.message(resposta)
