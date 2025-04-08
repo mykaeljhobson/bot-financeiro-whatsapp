@@ -3,3 +3,6 @@ twilio
 python-dotenv
 gunicorn
 openai>=1.0.0
+pandas
+requests
+matplotlib
