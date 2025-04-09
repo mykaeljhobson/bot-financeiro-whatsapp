@@ -24,9 +24,20 @@ def webhook():
     phone = request.values.get("From", "")
     response = MessagingResponse()
 
+    # ✅ TRATAMENTO DO COMANDO 'relatorio'
+    if incoming_msg.startswith("relatorio"):
+        periodo = incoming_msg.replace("relatorio", "").strip() or "mes"
+        estado_usuario[phone] = {"etapa": "tipo_relatorio", "periodo": periodo}
+        response.message(
+            "📊 Que tipo de relatório você deseja?\n"
+            "1️⃣ Gráfico (imagem)\n"
+            "2️⃣ Planilha (CSV)"
+        )
+        return str(response)
+
+    # ✅ ETAPA DE ESCOLHA DO TIPO DE RELATÓRIO
     if phone in estado_usuario:
         etapa = estado_usuario[phone]["etapa"]
-        
         if etapa == "tipo_relatorio":
             if incoming_msg in ["1", "2"]:
                 periodo = estado_usuario[phone]["periodo"]
@@ -49,18 +60,9 @@ def webhook():
                 response.message("❌ Opção inválida. Responda com 1 ou 2.")
             return str(response)
 
-    if incoming_msg.startswith("relatorio"):
-        periodo = incoming_msg.replace("relatorio", "").strip() or "mes"
-        estado_usuario[phone] = {"etapa": "tipo_relatorio", "periodo": periodo}
-        response.message(
-    "📊 Que tipo de relatório você deseja?\n"
-    "1️⃣ Gráfico (imagem)\n"
-    "2️⃣ Planilha (CSV)"
-)
-    else:
-        resposta = process_message(incoming_msg, phone)
-        response.message(resposta)
-
+    # ✅ COMANDOS GERAIS
+    resposta = process_message(incoming_msg, phone)
+    response.message(resposta)
     return str(response)
 
 def send_media(to, media_url, caption):
@@ -73,3 +75,6 @@ def send_media(to, media_url, caption):
 
 # Inicializa o banco de dados ao subir o app
 init_db()
+
+if __name__ == "__main__":
+    app.run()
