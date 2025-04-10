@@ -2,63 +2,89 @@ from database import insert_gasto, get_resumo, set_limite, check_limite
 from relatorio_csv import gerar_planilha_csv
 from uploader import upload_para_imgur
 from datetime import datetime
-import openai
-import os
 
-# Chave da OpenAI
-openai.api_key = os.environ.get("OPENAI_API_KEY")
-
-def sugerir_categoria_ia(descricao):
-    prompt = f"Classifique a seguinte descrição de gasto em uma categoria: '{descricao}'. Sugira uma categoria curta como alimentação, transporte, lazer, saúde, etc."
-    try:
-        resposta = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=20,
-            temperature=0.5,
-        )
-        return resposta.choices[0].message.content.strip().lower()
-    except Exception as e:
-        print(f"Erro ao usar IA: {e}")
-        return "outros"
+estado_usuario = {}
 
 def process_message(msg, phone):
-    tokens = msg.lower().split()
+    global estado_usuario
+    msg = msg.lower().strip()
 
-    # comandos padrão tipo "gasto 20 lanche"
-    if tokens[0] == "gasto":
-        try:
-            valor = float(tokens[1])
-            descricao = " ".join(tokens[2:])
-            categoria = sugerir_categoria_ia(descricao)
-            insert_gasto(phone, valor, descricao, categoria)
+    # Etapa: aguardando categoria
+    if phone in estado_usuario:
+        etapa = estado_usuario[phone].get("etapa")
+
+        if etapa == "categoria":
+            categorias = {
+                "1": "alimentação",
+                "2": "transporte",
+                "3": "lazer",
+                "4": "saúde",
+                "5": "moradia",
+                "6": "outros"
+            }
+            if msg in categorias:
+                if msg == "6":
+                    estado_usuario[phone]["etapa"] = "outra_categoria"
+                    return "✍️ Digite a categoria personalizada para este gasto:"
+                else:
+                    gasto = estado_usuario.pop(phone)
+                    insert_gasto(phone, gasto["valor"], gasto["descricao"], categorias[msg])
+                    alerta = check_limite(phone)
+                    return f"✅ Gasto registrado: R${gasto['valor']:.2f} - {gasto['descricao']} (Categoria: {categorias[msg]})\n{alerta}"
+
+        elif etapa == "outra_categoria":
+            gasto = estado_usuario.pop(phone)
+            insert_gasto(phone, gasto["valor"], gasto["descricao"], msg)
             alerta = check_limite(phone)
-            return f"✅ Gasto registrado: R${valor:.2f} - {descricao} (Categoria: {categoria})\n{alerta}"
-        except:
-            return "❌ Formato inválido. Use: gasto 25 almoço"
+            return f"✅ Gasto registrado: R${gasto['valor']:.2f} - {gasto['descricao']} (Categoria: {msg})\n{alerta}"
 
-    # comandos naturais tipo "cafe 20"
-    if len(tokens) == 2:
+    # Detectar mensagens do tipo "cafe 15", "15 uber", "gastei 30 com pizza"
+    tokens = msg.split()
+    valor = None
+    descricao = []
+
+    for token in tokens:
         try:
-            valor = float(tokens[1])
-            descricao = tokens[0]
-            categoria = sugerir_categoria_ia(descricao)
-            insert_gasto(phone, valor, descricao, categoria)
-            alerta = check_limite(phone)
-            return f"✅ Gasto registrado: R${valor:.2f} - {descricao} (Categoria sugerida: {categoria})\n{alerta}"
+            valor = float(token.replace(",", "."))
+            continue
         except:
-            pass  # não for possível, segue abaixo
+            descricao.append(token)
 
-    if tokens[0] == "resumo":
-        periodo = tokens[1] if len(tokens) > 1 else "hoje"
+    if valor and descricao:
+        descricao_final = " ".join(descricao)
+        estado_usuario[phone] = {
+            "valor": valor,
+            "descricao": descricao_final,
+            "etapa": "categoria"
+        }
+        return (
+            f"📌 Qual categoria para "{descricao_final} {valor}"?
+"
+            "1️⃣ Alimentação
+"
+            "2️⃣ Transporte
+"
+            "3️⃣ Lazer
+"
+            "4️⃣ Saúde
+"
+            "5️⃣ Moradia
+"
+            "6️⃣ Outros"
+        )
+
+    # Comandos padrões
+    if msg.startswith("resumo"):
+        periodo = msg.replace("resumo", "").strip() or "hoje"
         return get_resumo(phone, periodo)
 
-    elif tokens[0] == "limite":
+    elif msg.startswith("limite"):
         try:
+            tokens = msg.split()
             valor = float(tokens[1])
             set_limite(phone, valor)
             return f"🔒 Limite mensal definido: R${valor:.2f}"
         except:
             return "❌ Use: limite 1500"
 
-    return "🤖 Comandos disponíveis: gasto, resumo [hoje|semana|mês], limite, relatorio"
+    return "🤖 Comandos disponíveis: gasto 25 lanche | resumo hoje | limite 1500 | relatorio"
