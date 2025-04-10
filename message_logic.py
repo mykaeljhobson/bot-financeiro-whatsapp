@@ -58,7 +58,7 @@ def process_message(msg, phone):
             "etapa": "categoria"
         }
         return (
-            f"📌 Qual categoria para "{descricao_final} {valor}"?
+            f"📌 Qual categoria para "{descricao_final} {valor}""?
 "
             "1️⃣ Alimentação
 "
