@@ -6,10 +6,17 @@ def gerar_planilha_csv(periodo="mes", telefone=None):
     conn = sqlite3.connect("gastos.db")
     c = conn.cursor()
 
-    # Para testes: ignora o filtro de data e retorna tudo do telefone
-    query = "SELECT data_hora, descricao, categoria, valor FROM gastos WHERE telefone=?"
-    c.execute(query, (telefone,))
+    if periodo == "hoje":
+        query = "SELECT data_hora, descricao, categoria, valor FROM gastos WHERE telefone=? AND date(data_hora) = date('now')"
+    elif periodo == "semana":
+        query = "SELECT data_hora, descricao, categoria, valor FROM gastos WHERE telefone=? AND date(data_hora) >= date('now', '-6 days')"
+    elif periodo == "mes":
+        query = "SELECT data_hora, descricao, categoria, valor FROM gastos WHERE telefone=? AND strftime('%Y-%m', data_hora) = strftime('%Y-%m', 'now')"
+    else:
+        conn.close()
+        return None
 
+    c.execute(query, (telefone,))
     dados = c.fetchall()
     conn.close()
 
