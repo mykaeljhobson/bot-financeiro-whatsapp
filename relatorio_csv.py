@@ -3,6 +3,9 @@ import sqlite3
 import tempfile
 
 def gerar_planilha_csv(periodo="mes", telefone=None):
+    if telefone and telefone.startswith("whatsapp:"):
+        telefone = telefone.replace("whatsapp:", "")
+
     conn = sqlite3.connect("gastos.db")
     c = conn.cursor()
 
