@@ -4,13 +4,18 @@ from database import insert_gasto, get_resumo, set_limite, check_limite, excluir
 estado_usuario = {}
 
 def process_message(msg, telefone):
-    msg = msg.strip().lower()
+    msg = msg.strip().lower().replace(",", ".")
+
+    # Cancelar pendente se novo gasto começar
+    if telefone in estado_usuario and estado_usuario[telefone].get("etapa") == "categoria":
+        if re.search(r"(\d+(\.\d+)?\s+\w+|\w+\s+\d+(\.\d+)?)", msg):
+            estado_usuario.pop(telefone)
 
     # Cancelar última compra
     if msg in ["cancelar", "desfazer", "remover último"]:
         return excluir_ultimo_gasto(telefone)
 
-    # Definir limite direto
+    # Definir limite
     if msg.startswith("limite"):
         try:
             valor = float(re.findall(r"\d+(\.\d+)?", msg)[0])
@@ -18,13 +23,13 @@ def process_message(msg, telefone):
         except:
             return "❌ Informe o valor corretamente. Ex: limite 1000"
 
-    # Relatório manual (resumo mês)
+    # Relatório manual
     if msg == "relatorio manual":
         return get_resumo(telefone, "mes")
 
-    # Relatório imagem (opção 1)
+    # Relatório imagem
     if msg.startswith("relatorio_imagem"):
-        return "📈 Relatório em gráfico ainda não está disponível. Em breve!"
+        return "📈 (em breve: gráfico com seus gastos por categoria!)"
 
     # Resumo
     if msg.startswith("resumo"):
@@ -35,7 +40,7 @@ def process_message(msg, telefone):
             periodo = "mes"
         return get_resumo(telefone, periodo)
 
-    # Gastos simplificados tipo: "cafe 20" ou "20 uber"
+    # Gastos tipo "cafe 14", "14 uber", "gastei 13 com lanche"
     match = re.match(r"(\d+(\.\d+)?)[\s\-]+(.*)", msg)
     if match:
         valor = float(match.group(1))
@@ -46,7 +51,7 @@ def process_message(msg, telefone):
             descricao = match.group(1).strip()
             valor = float(match.group(2))
         else:
-            return "🤖 Comandos disponíveis: gasto 25 lanche | resumo hoje | limite 1500 | relatorio manual"
+            return "🤖 Não entendi. Tente algo como `lanche 20`, `resumo hoje`, `limite 1000`, ou `cancelar`."
 
     estado_usuario[telefone] = {
         "etapa": "categoria",
