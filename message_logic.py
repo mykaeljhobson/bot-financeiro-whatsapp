@@ -41,12 +41,12 @@ def process_message(msg, telefone):
         return get_resumo(telefone, periodo)
 
     # Gastos simples tipo "uber 15", "15 café", "gastei 30 em pizza"
-    match = re.match(r"(\d+(\.\d+)?)[\s\-]+(.+)", msg)
+    match = re.match(r"(\d+(?:\.\d+)?)(?:[\s\-]*)?(.+)", msg)
     if match:
         valor = float(match.group(1))
         descricao = match.group(3).strip()
     else:
-        match = re.match(r"(.+)[\s\-]+(\d+(\.\d+)?)", msg)
+        match = re.match(r"(.+?)(?:[\s\-]*)?(\d+(?:\.\d+)?)$", msg)
         if match:
             descricao = match.group(1).strip()
             valor = float(match.group(2))

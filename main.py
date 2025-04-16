@@ -22,6 +22,9 @@ def webhook():
     phone = request.values.get("From", "")
     response = MessagingResponse()
 
+    print(f"DEBUG estado_usuario: {estado_usuario}")
+
+
     # Se estiver escolhendo tipo de relatório
     if phone in estado_usuario and estado_usuario[phone].get("etapa") == "tipo_relatorio":
         if incoming_msg in ["1", "2"]:

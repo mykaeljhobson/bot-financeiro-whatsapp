@@ -6,7 +6,7 @@ from datetime import datetime
 def gerar_grafico_categoria(tipo="pizza"):
     conn = sqlite3.connect("gastos.db")
     c = conn.cursor()
-    c.execute("SELECT categoria, SUM(valor) FROM gastos WHERE strftime('%Y-%m', data) = strftime('%Y-%m', 'now') GROUP BY categoria")
+    c.execute("SELECT categoria, SUM(valor) FROM gastos WHERE strftime('%Y-%m', data_hora) = strftime('%Y-%m', 'now', 'localtime') GROUP BY categoria")
     dados = c.fetchall()
     conn.close()
 
@@ -31,7 +31,7 @@ def gerar_grafico_categoria(tipo="pizza"):
 def gerar_grafico_diario():
     conn = sqlite3.connect("gastos.db")
     c = conn.cursor()
-    c.execute("SELECT data, SUM(valor) FROM gastos WHERE strftime('%Y-%m', data) = strftime('%Y-%m', 'now') GROUP BY data")
+    c.execute("SELECT data, SUM(valor) FROM gastos WHERE strftime('%Y-%m', data_hora) = strftime('%Y-%m', 'now', 'localtime') GROUP BY data")
     dados = c.fetchall()
     conn.close()
 
