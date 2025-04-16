@@ -1,84 +1,89 @@
-from database import insert_gasto, get_resumo, set_limite, check_limite
-from relatorio_csv import gerar_planilha_csv
-from uploader import upload_para_imgur
-from datetime import datetime
+import re
+from database import insert_gasto, get_resumo, set_limite, check_limite, excluir_ultimo_gasto
 
 estado_usuario = {}
 
-def process_message(msg, phone):
-    global estado_usuario
-    msg = msg.lower().strip()
+def process_message(msg, telefone):
+    msg = msg.strip().lower()
 
-    # Etapa: aguardando categoria
-    if phone in estado_usuario:
-        etapa = estado_usuario[phone].get("etapa")
+    # Cancelar última compra
+    if msg in ["cancelar", "desfazer", "remover último"]:
+        return excluir_ultimo_gasto(telefone)
 
-        if etapa == "categoria":
-            categorias = {
-                "1": "alimentação",
-                "2": "transporte",
-                "3": "lazer",
-                "4": "saúde",
-                "5": "moradia",
-                "6": "outros"
-            }
-            if msg in categorias:
-                if msg == "6":
-                    estado_usuario[phone]["etapa"] = "outra_categoria"
-                    return "✍️ Digite a categoria personalizada para este gasto:"
-                else:
-                    gasto = estado_usuario.pop(phone)
-                    insert_gasto(phone, gasto["valor"], gasto["descricao"], categorias[msg])
-                    alerta = check_limite(phone)
-                    return f"✅ Gasto registrado: R${gasto['valor']:.2f} - {gasto['descricao']} (Categoria: {categorias[msg]})\n{alerta}"
-
-        elif etapa == "outra_categoria":
-            gasto = estado_usuario.pop(phone)
-            insert_gasto(phone, gasto["valor"], gasto["descricao"], msg)
-            alerta = check_limite(phone)
-            return f"✅ Gasto registrado: R${gasto['valor']:.2f} - {gasto['descricao']} (Categoria: {msg})\n{alerta}"
-
-    # Detectar mensagens do tipo "cafe 15", "15 uber", "gastei 30 com pizza"
-    tokens = msg.split()
-    valor = None
-    descricao = []
-
-    for token in tokens:
+    # Definir limite direto
+    if msg.startswith("limite"):
         try:
-            valor = float(token.replace(",", "."))
-            continue
+            valor = float(re.findall(r"\d+(\.\d+)?", msg)[0])
+            return set_limite(telefone, valor)
         except:
-            descricao.append(token)
+            return "❌ Informe o valor corretamente. Ex: limite 1000"
 
-    if valor and descricao:
-        descricao_final = " ".join(descricao)
-        estado_usuario[phone] = {
-            "valor": valor,
-            "descricao": descricao_final,
-            "etapa": "categoria"
-        }
-        return (
-            f"📌 Qual categoria para \"{descricao_final} {valor}\"?\n"
-            "1️⃣ Alimentação\n"
-            "2️⃣ Transporte\n"
-            "3️⃣ Lazer\n"
-            "4️⃣ Saúde\n"
-            "5️⃣ Moradia\n"
-            "6️⃣ Outros"
-        )
+    # Relatório manual (resumo mês)
+    if msg == "relatorio manual":
+        return get_resumo(telefone, "mes")
 
-    # Comandos padrões
+    # Relatório imagem (opção 1)
+    if msg.startswith("relatorio_imagem"):
+        return "📈 Relatório em gráfico ainda não está disponível. Em breve!"
+
+    # Resumo
     if msg.startswith("resumo"):
-        periodo = msg.replace("resumo", "").strip() or "hoje"
-        return get_resumo(phone, periodo)
+        periodo = "hoje"
+        if "semana" in msg:
+            periodo = "semana"
+        elif "mes" in msg or "mês" in msg:
+            periodo = "mes"
+        return get_resumo(telefone, periodo)
 
-    elif msg.startswith("limite"):
-        try:
-            tokens = msg.split()
-            valor = float(tokens[1])
-            set_limite(phone, valor)
-            return f"🔒 Limite mensal definido: R${valor:.2f}"
-        except:
-            return "❌ Use: limite 1500"
+    # Gastos simplificados tipo: "cafe 20" ou "20 uber"
+    match = re.match(r"(\d+(\.\d+)?)[\s\-]+(.*)", msg)
+    if match:
+        valor = float(match.group(1))
+        descricao = match.group(3).strip()
+    else:
+        match = re.match(r"(.*?)[\s\-]+(\d+(\.\d+)?)", msg)
+        if match:
+            descricao = match.group(1).strip()
+            valor = float(match.group(2))
+        else:
+            return "🤖 Comandos disponíveis: gasto 25 lanche | resumo hoje | limite 1500 | relatorio manual"
 
-    return "🤖 Comandos disponíveis: gasto 25 lanche | resumo hoje | limite 1500 | relatorio"
+    estado_usuario[telefone] = {
+        "etapa": "categoria",
+        "valor": valor,
+        "descricao": descricao
+    }
+
+    return f"📌 Qual categoria para \"{descricao} {valor:.2f}\"?\n" + (
+        "1️⃣ Alimentação\n"
+        "2️⃣ Transporte\n"
+        "3️⃣ Lazer\n"
+        "4️⃣ Saúde\n"
+        "5️⃣ Moradia\n"
+        "6️⃣ Outros"
+    )
+
+def process_categoria(msg, telefone):
+    categorias = {
+        "1": "alimentação",
+        "2": "transporte",
+        "3": "lazer",
+        "4": "saúde",
+        "5": "moradia",
+        "6": "outros"
+    }
+
+    if telefone not in estado_usuario:
+        return "⚠️ Nenhum gasto pendente para categorizar."
+
+    if msg not in categorias:
+        return "❌ Categoria inválida. Escolha um número de 1 a 6."
+
+    valor = estado_usuario[telefone]["valor"]
+    descricao = estado_usuario[telefone]["descricao"]
+    categoria = categorias[msg]
+    del estado_usuario[telefone]
+
+    insert_gasto(telefone, valor, descricao, categoria)
+    alerta = check_limite(telefone)
+    return f"✅ Gasto registrado: R${valor:.2f} - {descricao} (Categoria: {categoria})\n{alerta}"
