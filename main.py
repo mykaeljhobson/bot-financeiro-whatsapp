@@ -3,7 +3,7 @@ from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
 from uploader import upload_para_imgur
 from relatorio_csv import gerar_planilha_csv
-from message_logic import process_message, estado_usuario
+from message_logic import process_message, estado_usuario, process_categoria
 from database import init_db
 import os
 
@@ -22,18 +22,7 @@ def webhook():
     phone = request.values.get("From", "")
     response = MessagingResponse()
 
-    # ✅ Tratamento interativo do comando 'relatorio'
-    if incoming_msg.startswith("relatorio"):
-        periodo = incoming_msg.replace("relatorio", "").strip() or "mes"
-        estado_usuario[phone] = {"etapa": "tipo_relatorio", "periodo": periodo}
-        response.message(
-            """📊 Que tipo de relatório você deseja?
-1️⃣ Gráfico (imagem)
-2️⃣ Planilha (CSV)"""
-        )
-        return str(response)
-
-    # ✅ Continuação da interação após escolher tipo de relatório
+    # Se estiver escolhendo tipo de relatório
     if phone in estado_usuario and estado_usuario[phone].get("etapa") == "tipo_relatorio":
         if incoming_msg in ["1", "2"]:
             periodo = estado_usuario[phone]["periodo"]
@@ -56,7 +45,24 @@ def webhook():
             response.message("❌ Opção inválida. Responda com 1 ou 2.")
         return str(response)
 
-    # ✅ Comandos gerais
+    # Se estiver escolhendo categoria
+    if phone in estado_usuario and estado_usuario[phone].get("etapa") == "categoria":
+        resposta = process_categoria(incoming_msg, phone)
+        response.message(resposta)
+        return str(response)
+
+    # Iniciar geração de relatório
+    if incoming_msg.startswith("relatorio"):
+        periodo = incoming_msg.replace("relatorio", "").strip() or "mes"
+        estado_usuario[phone] = {"etapa": "tipo_relatorio", "periodo": periodo}
+        response.message(
+            """📊 Que tipo de relatório você deseja?
+1️⃣ Gráfico (imagem)
+2️⃣ Planilha (CSV)"""
+        )
+        return str(response)
+
+    # Demais mensagens
     resposta = process_message(incoming_msg, phone)
     response.message(resposta)
     return str(response)
