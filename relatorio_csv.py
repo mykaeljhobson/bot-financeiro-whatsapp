@@ -7,11 +7,11 @@ def gerar_planilha_csv(periodo="mes", telefone=None):
     c = conn.cursor()
 
     if periodo == "hoje":
-        query = "SELECT data_hora, descricao, categoria, valor FROM gastos WHERE telefone=? AND date(data_hora) = date('now')"
+        query = "SELECT data_hora, descricao, categoria, valor FROM gastos WHERE telefone=? AND date(data_hora) = date('now', 'localtime')"
     elif periodo == "semana":
-        query = "SELECT data_hora, descricao, categoria, valor FROM gastos WHERE telefone=? AND date(data_hora) >= date('now', '-6 days')"
+        query = "SELECT data_hora, descricao, categoria, valor FROM gastos WHERE telefone=? AND date(data_hora) >= date('now', '-6 days', 'localtime')"
     elif periodo == "mes":
-        query = "SELECT data_hora, descricao, categoria, valor FROM gastos WHERE telefone=? AND strftime('%Y-%m', data_hora) = strftime('%Y-%m', 'now')"
+        query = "SELECT data_hora, descricao, categoria, valor FROM gastos WHERE telefone=? AND strftime('%Y-%m', data_hora) = strftime('%Y-%m', 'now', 'localtime')"
     else:
         conn.close()
         return None
@@ -23,7 +23,7 @@ def gerar_planilha_csv(periodo="mes", telefone=None):
     if not dados:
         return None
 
-    df = pd.DataFrame(dados, columns=["Data/Hora", "Descrição", "Categoria", "Valor (R$)"])
+    df = pd.DataFrame(dados, columns=["Data e Hora", "Descrição", "Categoria", "Valor (R$)"])
     temp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
     df.to_csv(temp.name, index=False)
     return temp.name
